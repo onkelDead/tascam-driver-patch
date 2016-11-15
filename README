@@ -1,0 +1,46 @@
+TASCAM US-16x08 mixer support for kernel driver snd-usb-audio
+
+How to apply this patch.
+
+Download the current kernel sources
+---------------------------------------------
+cd /usr/src
+
+sudo apt-get source linux-image-$(uname -r)
+
+
+
+Prepare kernel sources for module compilation
+---------------------------------------------
+cd /usr/src/<your kernel version>
+cp /boot/config-4.4.0-47-lowlatency .config
+cp /usr/src/linux-headers-4.4.0-47-lowlatency/Module.symvers .
+make prepare
+make scripts
+
+
+
+Apply patch file
+---------------------------------------------
+cd /usr/src/<your kernel version>/sound/usb
+patch < us16x08.path 
+
+
+
+Compile module
+---------------------------------------------
+cd /usr/src/<your kernel version>
+make M=sound/usb
+
+
+
+Install module
+---------------------------------------------
+cp /usr/src/<your kernel version>/sound/usb/snd-usb-audio.ko /lib/modules/<your kernel version>/kernel/sound/usb/
+reboot
+
+
+
+After reboot you should be able to control the Tascam DSP (EQ/Compressor) via e.g. alsamixer/gnome-alsamixer.
+
+
