@@ -13,8 +13,8 @@ sudo apt-get source linux-image-$(uname -r)
 Prepare kernel sources for module compilation
 ---------------------------------------------
 cd /usr/src/<your kernel version>
-cp /boot/config-4.4.0-47-lowlatency .config
-cp /usr/src/linux-headers-4.4.0-47-lowlatency/Module.symvers .
+cp /boot/config-$(uname -r) .config
+cp /usr/src/linux-headers-$(uname -r)/Module.symvers .
 make prepare
 make scripts
 
@@ -36,7 +36,7 @@ make M=sound/usb
 
 Install module
 ---------------------------------------------
-cp /usr/src/<your kernel version>/sound/usb/snd-usb-audio.ko /lib/modules/<your kernel version>/kernel/sound/usb/
+cp /usr/src/<your kernel version>/sound/usb/snd-usb-audio.ko /lib/modules/$(uname -r)/kernel/sound/usb/
 reboot
 
 
