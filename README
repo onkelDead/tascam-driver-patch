@@ -40,3 +40,11 @@ reboot
 After reboot you should be able to control the Tascam DSP (EQ/Compressor) via e.g. alsamixer/gnome-alsamixer.
 
 
+Change log
+--------------------------------------------------------------
+
+Jan-05 2017:
+- added new Tascam firmware v2.00 feature DSP bypass switch.
+- fixed EQ initial disabled.
+- fixed Comp Release initial value to 10ms.
+
