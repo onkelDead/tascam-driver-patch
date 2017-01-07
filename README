@@ -48,3 +48,5 @@ Jan-05 2017:
 - fixed EQ initial disabled.
 - fixed Comp Release initial value to 10ms.
 
+Jan-07 2017:
+- change compressor meter poll. Poll only values for channels with actice compressor.
