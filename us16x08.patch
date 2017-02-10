@@ -1,4 +1,4 @@
-[PATCH v4 1/1] ALSA: Tascam US-16x08 DSP mixer quirk
+[PATCH] ALSA: Tascam US-16x08 DSP mixer quirk
 
 Add mixer quirk for Tascam US-16x08 usb interface.
 Even that this an usb compliant device,
@@ -52,7 +52,7 @@ index 04991b0..4fa0053 100644
  	case USB_ID(0x041e, 0x3042):
 diff --git a/sound/usb/mixer_us16x08.c b/sound/usb/mixer_us16x08.c
 new file mode 100644
-index 0000000..0ee3f40
+index 0000000..700c2ad
 --- /dev/null
 +++ b/sound/usb/mixer_us16x08.c
 @@ -0,0 +1,1425 @@
@@ -301,7 +301,7 @@ index 0000000..0ee3f40
 +		usb_audio_err(chip, "Failed to set routing, err:%d\n", err);
 +	}
 +
-+	return err == 0 ? 1 : 0;
++	return err > 0 ? 1 : 0;
 +}
 +
 +static int snd_us16x08_master_info(struct snd_kcontrol *kcontrol,
@@ -356,7 +356,7 @@ index 0000000..0ee3f40
 +		usb_audio_err(chip, "Failed to set master, err:%d\n", err);
 +	}
 +
-+	return err == 0 ? 1 : 0;
++	return err > 0 ? 1 : 0;
 +}
 +
 +static int snd_us16x08_bus_put(struct snd_kcontrol *kcontrol,
@@ -398,7 +398,7 @@ index 0000000..0ee3f40
 +		usb_audio_err(chip, "Failed to set buss param, err:%d\n", err);
 +	}
 +
-+	return err == 0 ? 1 : 0;
++	return err > 0 ? 1 : 0;
 +}
 +
 +static int snd_us16x08_bus_get(struct snd_kcontrol *kcontrol,
@@ -461,7 +461,7 @@ index 0000000..0ee3f40
 +		usb_audio_err(chip, "Failed to set channel, err:%d\n", err);
 +	}
 +
-+	return err == 0 ? 1 : 0;
++	return err > 0 ? 1 : 0;
 +}
 +
 +static int snd_us16x08_mix_info(struct snd_kcontrol *kcontrol,
