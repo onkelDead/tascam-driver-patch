@@ -20,20 +20,18 @@ make scripts
 
 Apply patch file
 --------------------------------------------------------------
-cd /usr/src/<your kernel version>/sound/usb
-patch < us16x08.path 
+patch --strip=1 < us16x08.path 
 
 
 Compile module
 --------------------------------------------------------------
-cd /usr/src/<your kernel version>
 make M=sound/usb
 
 
 Save original and installation
 --------------------------------------------------------------
 cp /lib/modules/$(uname -r)/kernel/sound/usb/snd-usb-audio.ko <any-save-folder>
-cp /usr/src/<your kernel version>/sound/usb/snd-usb-audio.ko /lib/modules/$(uname -r)/kernel/sound/usb/
+cp sound/usb/snd-usb-audio.ko /lib/modules/$(uname -r)/kernel/sound/usb/
 reboot
 
 
@@ -50,3 +48,7 @@ Jan-05 2017:
 
 Jan-07 2017:
 - change compressor meter poll. Poll only values for channels with actice compressor.
+
+Jul-27 2017:
+- update patch file to follow version contained in kernel version 4.12
+

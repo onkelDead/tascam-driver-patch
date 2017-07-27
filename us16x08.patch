@@ -9,9 +9,9 @@ Signed-off-by: Detlef Urban <onkel@paraair.de>
 ---
  sound/usb/Makefile        |    1 +
  sound/usb/mixer_quirks.c  |    5 +
- sound/usb/mixer_us16x08.c | 1425 +++++++++++++++++++++++++++++++++++++++++++++
- sound/usb/mixer_us16x08.h |  122 ++++
- 4 files changed, 1553 insertions(+)
+ sound/usb/mixer_us16x08.c | 1424 +++++++++++++++++++++++++++++++++++++++++++++
+ sound/usb/mixer_us16x08.h |  121 ++++
+ 4 files changed, 1551 insertions(+)
  create mode 100644 sound/usb/mixer_us16x08.c
  create mode 100644 sound/usb/mixer_us16x08.h
 
@@ -52,10 +52,10 @@ index 04991b0..4fa0053 100644
  	case USB_ID(0x041e, 0x3042):
 diff --git a/sound/usb/mixer_us16x08.c b/sound/usb/mixer_us16x08.c
 new file mode 100644
-index 0000000..700c2ad
+index 0000000..26ed23b
 --- /dev/null
 +++ b/sound/usb/mixer_us16x08.c
-@@ -0,0 +1,1425 @@
+@@ -0,0 +1,1424 @@
 +/*
 + *   Tascam US-16x08 ALSA driver
 + *
@@ -87,7 +87,7 @@ index 0000000..700c2ad
 +#include "mixer_us16x08.h"
 +
 +/* USB control message templates */
-+static char route_msg[] = {
++static const char route_msg[] = {
 +	0x61,
 +	0x02,
 +	0x03, /* input from master (0x02) or input from computer bus (0x03) */
@@ -110,15 +110,15 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char mix_init_msg1[] = {
++static const char mix_init_msg1[] = {
 +	0x71, 0x01, 0x00, 0x00
 +};
 +
-+static char mix_init_msg2[] = {
++static const char mix_init_msg2[] = {
 +	0x62, 0x02, 0x00, 0x61, 0x02, 0x04, 0xb1, 0x01, 0x00, 0x00
 +};
 +
-+static char mix_msg_in[] = {
++static const char mix_msg_in[] = {
 +	/* default message head, equal to all mixers */
 +	0x61, 0x02, 0x04, 0x62, 0x02, 0x01,
 +	0x81, /* 0x06: Controller ID */
@@ -128,7 +128,7 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char mix_msg_out[] = {
++static const char mix_msg_out[] = {
 +	/* default message head, equal to all mixers */
 +	0x61, 0x02, 0x02, 0x62, 0x02, 0x01,
 +	0x81, /* 0x06: Controller ID */
@@ -138,7 +138,7 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char bypass_msg_out[] = {
++static const char bypass_msg_out[] = {
 +	0x45,
 +	0x02,
 +	0x01, /* on/off flag */
@@ -146,7 +146,7 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char bus_msg_out[] = {
++static const char bus_msg_out[] = {
 +	0x44,
 +	0x02,
 +	0x01, /* on/off flag */
@@ -154,7 +154,7 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char comp_msg[] = {
++static const char comp_msg[] = {
 +	/* default message head, equal to all mixers */
 +	0x61, 0x02, 0x04, 0x62, 0x02, 0x01,
 +	0x91,
@@ -182,7 +182,7 @@ index 0000000..700c2ad
 +	0x00
 +};
 +
-+static char eqs_msq[] = {
++static const char eqs_msq[] = {
 +	/* default message head, equal to all mixers */
 +	0x61, 0x02, 0x04, 0x62, 0x02, 0x01,
 +	0x51, /*                0x06: Controller ID  */
@@ -205,9 +205,15 @@ index 0000000..700c2ad
 +};
 +
 +/* compressor ratio map */
-+static char ratio_map[] = {
++static const char ratio_map[] = {
 +	0x0a, 0x0b, 0x0d, 0x0f, 0x11, 0x14, 0x19, 0x1e,
 +	0x23, 0x28, 0x32, 0x3c, 0x50, 0xa0, 0xff
++};
++
++/* route enumeration names */
++static const char *const route_names[] = {
++	"Master Left", "Master Right", "Output 1", "Output 2", "Output 3",
++	"Output 4", "Output 5", "Output 6", "Output 7", "Output 8",
 +};
 +
 +static int snd_us16x08_recv_urb(struct snd_usb_audio *chip,
@@ -228,26 +234,15 @@ index 0000000..700c2ad
 + */
 +static int snd_us16x08_send_urb(struct snd_usb_audio *chip, char *buf, int size)
 +{
-+	int err = 0;
-+
-+	if (chip) {
-+		err = snd_usb_ctl_msg(chip->dev, usb_sndctrlpipe(chip->dev, 0),
++	return snd_usb_ctl_msg(chip->dev, usb_sndctrlpipe(chip->dev, 0),
 +			SND_US16X08_URB_REQUEST, SND_US16X08_URB_REQUESTTYPE,
 +			0, 0, buf, size);
-+	}
-+
-+	return err;
 +}
 +
 +static int snd_us16x08_route_info(struct snd_kcontrol *kcontrol,
 +	struct snd_ctl_elem_info *uinfo)
 +{
-+	uinfo->count = 1;
-+	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
-+	uinfo->value.integer.max = SND_US16X08_KCMAX(kcontrol);
-+	uinfo->value.integer.min = SND_US16X08_KCMIN(kcontrol);
-+	uinfo->value.integer.step = SND_US16X08_KCSTEP(kcontrol);
-+	return 0;
++	return snd_ctl_enum_info(uinfo, 1, 10, route_names);
 +}
 +
 +static int snd_us16x08_route_get(struct snd_kcontrol *kcontrol,
@@ -257,7 +252,7 @@ index 0000000..700c2ad
 +	int index = ucontrol->id.index;
 +
 +	/* route has no bias */
-+	ucontrol->value.integer.value[0] = elem->cache_val[index];
++	ucontrol->value.enumerated.item[0] = elem->cache_val[index];
 +
 +	return 0;
 +}
@@ -267,16 +262,20 @@ index 0000000..700c2ad
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
-+
 +	int index = ucontrol->id.index;
 +	char buf[sizeof(route_msg)];
-+	int val, val_org, err = 0;
++	int val, val_org, err;
++
++	/*  get the new value (no bias for routes) */
++	val = ucontrol->value.enumerated.item[0];
++
++	/* sanity check */
++	if (val < 0 || val > 9)
++		return -EINVAL;
 +
 +	/* prepare the message buffer from template */
 +	memcpy(buf, route_msg, sizeof(route_msg));
 +
-+	/*  get the new value (no bias for routes) */
-+	val = ucontrol->value.integer.value[0];
 +	if (val < 2) {
 +		/* input comes from a master channel */
 +		val_org = val;
@@ -298,7 +297,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set routing, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set routing, err:%d\n", err);
 +	}
 +
 +	return err > 0 ? 1 : 0;
@@ -319,7 +318,6 @@ index 0000000..700c2ad
 +	struct snd_ctl_elem_value *ucontrol)
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
-+
 +	int index = ucontrol->id.index;
 +
 +	ucontrol->value.integer.value[0] = elem->cache_val[index];
@@ -333,14 +331,19 @@ index 0000000..700c2ad
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
 +	char buf[sizeof(mix_msg_out)];
-+	int val, err = 0;
++	int val, err;
 +	int index = ucontrol->id.index;
-+
-+	/* prepare the message buffer from template */
-+	memcpy(buf, mix_msg_out, sizeof(mix_msg_out));
 +
 +	/* new control value incl. bias*/
 +	val = ucontrol->value.integer.value[0];
++
++	/* sanity check */
++	if (val < SND_US16X08_KCMIN(kcontrol)
++		|| val > SND_US16X08_KCMAX(kcontrol))
++		return -EINVAL;
++
++	/* prepare the message buffer from template */
++	memcpy(buf, mix_msg_out, sizeof(mix_msg_out));
 +
 +	buf[8] = val - SND_US16X08_KCBIAS(kcontrol);
 +	buf[6] = elem->head.id;
@@ -353,7 +356,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set master, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set master, err:%d\n", err);
 +	}
 +
 +	return err > 0 ? 1 : 0;
@@ -364,7 +367,6 @@ index 0000000..700c2ad
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
-+
 +	char buf[sizeof(mix_msg_out)];
 +	int val, err = 0;
 +
@@ -395,7 +397,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1;
 +		elem->cache_val[0] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set buss param, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set buss param, err:%d\n", err);
 +	}
 +
 +	return err > 0 ? 1 : 0;
@@ -442,10 +444,15 @@ index 0000000..700c2ad
 +	int val, err;
 +	int index = ucontrol->id.index;
 +
++	val = ucontrol->value.integer.value[0];
++
++	/* sanity check */
++	if (val < SND_US16X08_KCMIN(kcontrol)
++		|| val > SND_US16X08_KCMAX(kcontrol))
++		return -EINVAL;
++
 +	/* prepare URB message from template */
 +	memcpy(buf, mix_msg_in, sizeof(mix_msg_in));
-+
-+	val = ucontrol->value.integer.value[0];
 +
 +	/* add the bias to the new value */
 +	buf[8] = val - SND_US16X08_KCBIAS(kcontrol);
@@ -458,7 +465,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set channel, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set channel, err:%d\n", err);
 +	}
 +
 +	return err > 0 ? 1 : 0;
@@ -479,8 +486,7 @@ index 0000000..700c2ad
 +	struct snd_ctl_elem_value *ucontrol)
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
-+	struct snd_us16x08_comp_store *store =
-+		((struct snd_us16x08_comp_store *) elem->private_data);
++	struct snd_us16x08_comp_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
 +	int val_idx = COMP_STORE_IDX(elem->head.id);
 +
@@ -494,22 +500,26 @@ index 0000000..700c2ad
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
-+	struct snd_us16x08_comp_store *store =
-+		((struct snd_us16x08_comp_store *) elem->private_data);
++	struct snd_us16x08_comp_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
-+
 +	char buf[sizeof(comp_msg)];
 +	int val_idx, val;
-+	int err = 0;
++	int err;
 +
-+	/* prepare compressor URB message from template  */
-+	memcpy(buf, comp_msg, sizeof(comp_msg));
++	val = ucontrol->value.integer.value[0];
++
++	/* sanity check */
++	if (val < SND_US16X08_KCMIN(kcontrol)
++		|| val > SND_US16X08_KCMAX(kcontrol))
++		return -EINVAL;
 +
 +	/* new control value incl. bias*/
 +	val_idx = elem->head.id - SND_US16X08_ID_COMP_BASE;
 +
-+	val = ucontrol->value.integer.value[0];
 +	store->val[val_idx][index] = ucontrol->value.integer.value[0];
++
++	/* prepare compressor URB message from template  */
++	memcpy(buf, comp_msg, sizeof(comp_msg));
 +
 +	/* place comp values in message buffer watch bias! */
 +	buf[8] = store->val[
@@ -533,7 +543,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set compressor, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set compressor, err:%d\n", err);
 +	}
 +
 +	return 1;
@@ -542,10 +552,9 @@ index 0000000..700c2ad
 +static int snd_us16x08_eqswitch_get(struct snd_kcontrol *kcontrol,
 +	struct snd_ctl_elem_value *ucontrol)
 +{
-+	int val = 0;
++	int val;
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
-+	struct snd_us16x08_eq_store *store =
-+		((struct snd_us16x08_eq_store *) elem->private_data);
++	struct snd_us16x08_eq_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
 +
 +	/* get low switch from cache is enough, cause all bands are together */
@@ -561,10 +570,8 @@ index 0000000..700c2ad
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
-+	struct snd_us16x08_eq_store *store =
-+		((struct snd_us16x08_eq_store *) elem->private_data);
++	struct snd_us16x08_eq_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
-+
 +	char buf[sizeof(eqs_msq)];
 +	int val, err = 0;
 +	int b_idx;
@@ -595,7 +602,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set eq switch, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set eq switch, err:%d\n", err);
 +	}
 +
 +	return 1;
@@ -604,10 +611,9 @@ index 0000000..700c2ad
 +static int snd_us16x08_eq_get(struct snd_kcontrol *kcontrol,
 +	struct snd_ctl_elem_value *ucontrol)
 +{
-+	int val = 0;
++	int val;
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
-+	struct snd_us16x08_eq_store *store =
-+		((struct snd_us16x08_eq_store *) elem->private_data);
++	struct snd_us16x08_eq_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
 +	int b_idx = EQ_STORE_BAND_IDX(elem->head.id) - 1;
 +	int p_idx = EQ_STORE_PARAM_IDX(elem->head.id);
@@ -624,19 +630,22 @@ index 0000000..700c2ad
 +{
 +	struct usb_mixer_elem_info *elem = kcontrol->private_data;
 +	struct snd_usb_audio *chip = elem->head.mixer->chip;
-+	struct snd_us16x08_eq_store *store =
-+		((struct snd_us16x08_eq_store *) elem->private_data);
++	struct snd_us16x08_eq_store *store = elem->private_data;
 +	int index = ucontrol->id.index;
-+
 +	char buf[sizeof(eqs_msq)];
-+	int val, err = 0;
++	int val, err;
 +	int b_idx = EQ_STORE_BAND_IDX(elem->head.id) - 1;
 +	int p_idx = EQ_STORE_PARAM_IDX(elem->head.id);
 +
++	val = ucontrol->value.integer.value[0];
++
++	/* sanity check */
++	if (val < SND_US16X08_KCMIN(kcontrol)
++		|| val > SND_US16X08_KCMAX(kcontrol))
++		return -EINVAL;
++
 +	/* copy URB buffer from EQ template */
 +	memcpy(buf, eqs_msq, sizeof(eqs_msq));
-+
-+	val = ucontrol->value.integer.value[0];
 +
 +	store->val[b_idx][p_idx][index] = val;
 +	buf[20] = store->val[b_idx][3][index];
@@ -657,7 +666,7 @@ index 0000000..700c2ad
 +		elem->cached |= 1 << index;
 +		elem->cache_val[index] = val;
 +	} else {
-+		usb_audio_err(chip, "Failed to set eq param, err:%d\n", err);
++		usb_audio_dbg(chip, "Failed to set eq param, err:%d\n", err);
 +	}
 +
 +	return 1;
@@ -748,20 +757,17 @@ index 0000000..700c2ad
 +	struct snd_us16x08_meter_store *store = elem->private_data;
 +	u8 meter_urb[64];
 +
-+
-+	if (elem) {
-+		store = (struct snd_us16x08_meter_store *) elem->private_data;
-+		chip = elem->head.mixer->chip;
-+	} else
-+		return 0;
-+
 +	switch (kcontrol->private_value) {
-+	case 0:
-+		snd_us16x08_send_urb(chip, mix_init_msg1, 4);
++	case 0: {
++		char tmp[sizeof(mix_init_msg1)];
++
++		memcpy(tmp, mix_init_msg1, sizeof(mix_init_msg1));
++		snd_us16x08_send_urb(chip, tmp, 4);
 +		snd_us16x08_recv_urb(chip, meter_urb,
 +			sizeof(meter_urb));
 +		kcontrol->private_value++;
 +		break;
++	}
 +	case 1:
 +		snd_us16x08_recv_urb(chip, meter_urb,
 +			sizeof(meter_urb));
@@ -772,13 +778,17 @@ index 0000000..700c2ad
 +			sizeof(meter_urb));
 +		kcontrol->private_value++;
 +		break;
-+	case 3:
-+		mix_init_msg2[2] = snd_get_meter_comp_index(store);
-+		snd_us16x08_send_urb(chip, mix_init_msg2, 10);
++	case 3: {
++		char tmp[sizeof(mix_init_msg2)];
++
++		memcpy(tmp, mix_init_msg2, sizeof(mix_init_msg2));
++		tmp[2] = snd_get_meter_comp_index(store);
++		snd_us16x08_send_urb(chip, tmp, 10);
 +		snd_us16x08_recv_urb(chip, meter_urb,
 +			sizeof(meter_urb));
 +		kcontrol->private_value = 0;
 +		break;
++	}
 +	}
 +
 +	for (set = 0; set < 6; set++)
@@ -807,6 +817,11 @@ index 0000000..700c2ad
 +	int val;
 +
 +	val = ucontrol->value.integer.value[0];
++
++	/* sanity check */
++	if (val < 0 || val >= SND_US16X08_MAX_CHANNELS)
++		return -EINVAL;
++
 +	store->comp_active_index = val;
 +	store->comp_index = val;
 +
@@ -831,6 +846,16 @@ index 0000000..700c2ad
 +	.get = snd_us16x08_channel_get,
 +	.put = snd_us16x08_channel_put,
 +	.private_value = SND_US16X08_KCSET(SND_US16X08_FADER_BIAS, 1, 0, 133)
++};
++
++static struct snd_kcontrol_new snd_us16x08_pan_int_ctl = {
++	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
++	.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
++	.count = 16,
++	.info = snd_us16x08_mix_info,
++	.get = snd_us16x08_channel_get,
++	.put = snd_us16x08_channel_put,
++	.private_value = SND_US16X08_KCSET(SND_US16X08_FADER_BIAS, 1, 0, 255)
 +};
 +
 +static struct snd_kcontrol_new snd_us16x08_master_ctl = {
@@ -1002,11 +1027,11 @@ index 0000000..700c2ad
 +/* setup compressor store and assign default value */
 +static struct snd_us16x08_comp_store *snd_us16x08_create_comp_store(void)
 +{
-+	int i = 0;
-+	struct snd_us16x08_comp_store *tmp =
-+		kmalloc(sizeof(struct snd_us16x08_comp_store), GFP_KERNEL);
++	int i;
++	struct snd_us16x08_comp_store *tmp;
 +
-+	if (tmp == NULL)
++	tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
++	if (!tmp)
 +		return NULL;
 +
 +	for (i = 0; i < SND_US16X08_MAX_CHANNELS; i++) {
@@ -1025,10 +1050,10 @@ index 0000000..700c2ad
 +static struct snd_us16x08_eq_store *snd_us16x08_create_eq_store(void)
 +{
 +	int i, b_idx;
-+	struct snd_us16x08_eq_store *tmp =
-+		kmalloc(sizeof(struct snd_us16x08_eq_store), GFP_KERNEL);
++	struct snd_us16x08_eq_store *tmp;
 +
-+	if (tmp == NULL)
++	tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
++	if (!tmp)
 +		return NULL;
 +
 +	for (i = 0; i < SND_US16X08_MAX_CHANNELS; i++) {
@@ -1059,24 +1084,34 @@ index 0000000..700c2ad
 +	return tmp;
 +}
 +
-+struct snd_us16x08_meter_store *snd_us16x08_create_meter_store(void)
++static struct snd_us16x08_meter_store *snd_us16x08_create_meter_store(void)
 +{
-+	struct snd_us16x08_meter_store *tmp =
-+		kzalloc(sizeof(struct snd_us16x08_meter_store), GFP_KERNEL);
++	struct snd_us16x08_meter_store *tmp;
 +
++	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
 +	if (!tmp)
 +		return NULL;
 +	tmp->comp_index = 1;
 +	tmp->comp_active_index = 0;
 +	return tmp;
++}
 +
++/* release elem->private_free as well; called only once for each *_store */
++static void elem_private_free(struct snd_kcontrol *kctl)
++{
++	struct usb_mixer_elem_info *elem = kctl->private_data;
++
++	if (elem)
++		kfree(elem->private_data);
++	kfree(elem);
++	kctl->private_data = NULL;
 +}
 +
 +static int add_new_ctl(struct usb_mixer_interface *mixer,
 +	const struct snd_kcontrol_new *ncontrol,
 +	int index, int val_type, int channels,
-+	const char *name, const void *opt,
-+	void (*freeer)(struct snd_kcontrol *kctl),
++	const char *name, void *opt,
++	bool do_private_free,
 +	struct usb_mixer_elem_info **elem_ret)
 +{
 +	struct snd_kcontrol *kctl;
@@ -1096,7 +1131,7 @@ index 0000000..700c2ad
 +	elem->head.id = index;
 +	elem->val_type = val_type;
 +	elem->channels = channels;
-+	elem->private_data = (void *) opt;
++	elem->private_data = opt;
 +
 +	kctl = snd_ctl_new1(ncontrol, elem);
 +	if (!kctl) {
@@ -1104,7 +1139,10 @@ index 0000000..700c2ad
 +		return -ENOMEM;
 +	}
 +
-+	kctl->private_free = freeer;
++	if (do_private_free)
++		kctl->private_free = elem_private_free;
++	else
++		kctl->private_free = snd_usb_mixer_elem_free;
 +
 +	strlcpy(kctl->id.name, name, sizeof(kctl->id.name));
 +
@@ -1118,161 +1156,141 @@ index 0000000..700c2ad
 +	return 0;
 +}
 +
-+static struct snd_us16x08_control_params control_params;
-+
 +/* table of EQ controls */
-+static struct snd_us16x08_control_params eq_controls[] = {
++static const struct snd_us16x08_control_params eq_controls[] = {
 +	{ /* EQ switch */
 +		.kcontrol_new = &snd_us16x08_eq_switch_ctl,
 +		.control_id = SND_US16X08_ID_EQENABLE,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "EQ enable",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "EQ Switch",
 +	},
 +	{ /* EQ low gain */
 +		.kcontrol_new = &snd_us16x08_eq_gain_ctl,
 +		.control_id = SND_US16X08_ID_EQLOWLEVEL,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Low gain",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "EQ Low Volume",
 +	},
 +	{ /* EQ low freq */
 +		.kcontrol_new = &snd_us16x08_eq_low_freq_ctl,
 +		.control_id = SND_US16X08_ID_EQLOWFREQ,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Low freq",
-+		.freeer = NULL
++		.name = "EQ Low Frequence",
 +	},
 +	{ /* EQ mid low gain */
 +		.kcontrol_new = &snd_us16x08_eq_gain_ctl,
 +		.control_id = SND_US16X08_ID_EQLOWMIDLEVEL,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid low gain",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "EQ MidLow Volume",
 +	},
 +	{ /* EQ mid low freq */
 +		.kcontrol_new = &snd_us16x08_eq_mid_freq_ctl,
 +		.control_id = SND_US16X08_ID_EQLOWMIDFREQ,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid low freq",
-+		.freeer = NULL
++		.name = "EQ MidLow Frequence",
 +	},
 +	{ /* EQ mid low Q */
 +		.kcontrol_new = &snd_us16x08_eq_mid_width_ctl,
 +		.control_id = SND_US16X08_ID_EQLOWMIDWIDTH,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid low Q",
-+		.freeer = NULL
++		.name = "EQ MidLow Q",
 +	},
 +	{ /* EQ mid high gain */
 +		.kcontrol_new = &snd_us16x08_eq_gain_ctl,
 +		.control_id = SND_US16X08_ID_EQHIGHMIDLEVEL,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid high gain",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "EQ MidHigh Volume",
 +	},
 +	{ /* EQ mid high freq */
 +		.kcontrol_new = &snd_us16x08_eq_mid_freq_ctl,
 +		.control_id = SND_US16X08_ID_EQHIGHMIDFREQ,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid high freq",
-+		.freeer = NULL
++		.name = "EQ MidHigh Frequence",
 +	},
 +	{ /* EQ mid high Q */
 +		.kcontrol_new = &snd_us16x08_eq_mid_width_ctl,
 +		.control_id = SND_US16X08_ID_EQHIGHMIDWIDTH,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Mid high Q",
-+		.freeer = NULL
++		.name = "EQ MidHigh Q",
 +	},
 +	{ /* EQ high gain */
 +		.kcontrol_new = &snd_us16x08_eq_gain_ctl,
 +		.control_id = SND_US16X08_ID_EQHIGHLEVEL,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "High gain",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "EQ High Volume",
 +	},
 +	{ /* EQ low freq */
 +		.kcontrol_new = &snd_us16x08_eq_high_freq_ctl,
 +		.control_id = SND_US16X08_ID_EQHIGHFREQ,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "High freq",
-+		.freeer = NULL
++		.name = "EQ High Frequence",
 +	},
 +};
 +
 +/* table of compressor controls */
-+static struct snd_us16x08_control_params comp_controls[] = {
++static const struct snd_us16x08_control_params comp_controls[] = {
 +	{ /* Comp enable */
 +		.kcontrol_new = &snd_us16x08_compswitch_ctl,
 +		.control_id = SND_US16X08_ID_COMP_SWITCH,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Comp enable",
-+		.freeer = snd_usb_mixer_elem_free
++		.name = "Compressor Switch",
 +	},
 +	{ /* Comp threshold */
 +		.kcontrol_new = &snd_us16x08_comp_threshold_ctl,
 +		.control_id = SND_US16X08_ID_COMP_THRESHOLD,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Threshold",
-+		.freeer = NULL
++		.name = "Compressor Threshold Volume",
 +	},
 +	{ /* Comp ratio */
 +		.kcontrol_new = &snd_us16x08_comp_ratio_ctl,
 +		.control_id = SND_US16X08_ID_COMP_RATIO,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Ratio",
-+		.freeer = NULL
++		.name = "Compressor Ratio",
 +	},
 +	{ /* Comp attack */
 +		.kcontrol_new = &snd_us16x08_comp_attack_ctl,
 +		.control_id = SND_US16X08_ID_COMP_ATTACK,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Attack",
-+		.freeer = NULL
++		.name = "Compressor Attack",
 +	},
 +	{ /* Comp release */
 +		.kcontrol_new = &snd_us16x08_comp_release_ctl,
 +		.control_id = SND_US16X08_ID_COMP_RELEASE,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Release",
-+		.freeer = NULL
++		.name = "Compressor Release",
 +	},
 +	{ /* Comp gain */
 +		.kcontrol_new = &snd_us16x08_comp_gain_ctl,
 +		.control_id = SND_US16X08_ID_COMP_GAIN,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Gain",
-+		.freeer = NULL
++		.name = "Compressor Volume",
 +	},
 +};
 +
 +/* table of channel controls */
-+static struct snd_us16x08_control_params channel_controls[] = {
++static const struct snd_us16x08_control_params channel_controls[] = {
 +	{ /* Phase */
 +		.kcontrol_new = &snd_us16x08_ch_boolean_ctl,
 +		.control_id = SND_US16X08_ID_PHASE,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Phase",
-+		.freeer = snd_usb_mixer_elem_free,
++		.name = "Phase Switch",
 +		.default_val = 0
 +	},
 +	{ /* Fader */
@@ -1280,8 +1298,7 @@ index 0000000..700c2ad
 +		.control_id = SND_US16X08_ID_FADER,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Fader",
-+		.freeer = NULL,
++		.name = "Line Volume",
 +		.default_val = 127
 +	},
 +	{ /* Mute */
@@ -1289,30 +1306,27 @@ index 0000000..700c2ad
 +		.control_id = SND_US16X08_ID_MUTE,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Mute",
-+		.freeer = NULL,
++		.name = "Mute Switch",
 +		.default_val = 0
 +	},
 +	{ /* Pan */
-+		.kcontrol_new = &snd_us16x08_ch_int_ctl,
++		.kcontrol_new = &snd_us16x08_pan_int_ctl,
 +		.control_id = SND_US16X08_ID_PAN,
 +		.type = USB_MIXER_U16,
 +		.num_channels = 16,
-+		.name = "Pan",
-+		.freeer = NULL,
++		.name = "Pan Left-Right Volume",
 +		.default_val = 127
 +	},
 +};
 +
 +/* table of master controls */
-+static struct snd_us16x08_control_params master_controls[] = {
++static const struct snd_us16x08_control_params master_controls[] = {
 +	{ /* Master */
 +		.kcontrol_new = &snd_us16x08_master_ctl,
 +		.control_id = SND_US16X08_ID_FADER,
 +		.type = USB_MIXER_U8,
 +		.num_channels = 16,
-+		.name = "Master",
-+		.freeer = NULL,
++		.name = "Master Volume",
 +		.default_val = 127
 +	},
 +	{ /* Bypass */
@@ -1320,8 +1334,7 @@ index 0000000..700c2ad
 +		.control_id = SND_US16X08_ID_BYPASS,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Bypass",
-+		.freeer = NULL,
++		.name = "DSP Bypass Switch",
 +		.default_val = 0
 +	},
 +	{ /* Buss out */
@@ -1329,8 +1342,7 @@ index 0000000..700c2ad
 +		.control_id = SND_US16X08_ID_BUSS_OUT,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Buss out",
-+		.freeer = NULL,
++		.name = "Buss Out Switch",
 +		.default_val = 0
 +	},
 +	{ /* Master mute */
@@ -1338,8 +1350,7 @@ index 0000000..700c2ad
 +		.control_id = SND_US16X08_ID_MUTE,
 +		.type = USB_MIXER_BOOLEAN,
 +		.num_channels = 16,
-+		.name = "Master mute",
-+		.freeer = NULL,
++		.name = "Master Mute Switch",
 +		.default_val = 0
 +	},
 +
@@ -1357,32 +1368,12 @@ index 0000000..700c2ad
 +	/* just check for non-MIDI interface */
 +	if (mixer->hostif->desc.bInterfaceNumber == 3) {
 +
-+		/* create compressor mixer elements */
-+		comp_store = snd_us16x08_create_comp_store();
-+		if (comp_store == NULL)
-+			return -ENOMEM;
-+
-+		/* create eq store */
-+		eq_store = snd_us16x08_create_eq_store();
-+		if (eq_store == NULL) {
-+			kfree(comp_store);
-+			return -ENOMEM;
-+		}
-+
-+		/* create meters store */
-+		meter_store = snd_us16x08_create_meter_store();
-+		if (meter_store == NULL) {
-+			kfree(comp_store);
-+			kfree(eq_store);
-+			return -ENOMEM;
-+		}
-+
 +		/* add routing control */
 +		err = add_new_ctl(mixer, &snd_us16x08_route_ctl,
-+			SND_US16X08_ID_ROUTE, USB_MIXER_U8, 8, "Route",
-+			NULL, NULL, &elem);
++			SND_US16X08_ID_ROUTE, USB_MIXER_U8, 8, "Line Out Route",
++			NULL, false, &elem);
 +		if (err < 0) {
-+			usb_audio_err(mixer->chip,
++			usb_audio_dbg(mixer->chip,
 +				"Failed to create route control, err:%d\n",
 +				err);
 +			return err;
@@ -1391,11 +1382,13 @@ index 0000000..700c2ad
 +			elem->cache_val[i] = i < 2 ? i : i + 2;
 +		elem->cached = 0xff;
 +
++		/* create compressor mixer elements */
++		comp_store = snd_us16x08_create_comp_store();
++		if (!comp_store)
++			return -ENOMEM;
++
 +		/* add master controls */
-+		for (i = 0;
-+			i < sizeof(master_controls)
-+			/ sizeof(control_params);
-+			i++) {
++		for (i = 0; i < ARRAY_SIZE(master_controls); i++) {
 +
 +			err = add_new_ctl(mixer,
 +				master_controls[i].kcontrol_new,
@@ -1404,7 +1397,8 @@ index 0000000..700c2ad
 +				master_controls[i].num_channels,
 +				master_controls[i].name,
 +				comp_store,
-+				master_controls[i].freeer, &elem);
++				i == 0, /* release comp_store only once */
++				&elem);
 +			if (err < 0)
 +				return err;
 +			elem->cache_val[0] = master_controls[i].default_val;
@@ -1412,10 +1406,7 @@ index 0000000..700c2ad
 +		}
 +
 +		/* add channel controls */
-+		for (i = 0;
-+			i < sizeof(channel_controls)
-+			/ sizeof(control_params);
-+			i++) {
++		for (i = 0; i < ARRAY_SIZE(channel_controls); i++) {
 +
 +			err = add_new_ctl(mixer,
 +				channel_controls[i].kcontrol_new,
@@ -1424,7 +1415,7 @@ index 0000000..700c2ad
 +				channel_controls[i].num_channels,
 +				channel_controls[i].name,
 +				comp_store,
-+				channel_controls[i].freeer, &elem);
++				false, &elem);
 +			if (err < 0)
 +				return err;
 +			for (j = 0; j < SND_US16X08_MAX_CHANNELS; j++) {
@@ -1434,9 +1425,13 @@ index 0000000..700c2ad
 +			elem->cached = 0xffff;
 +		}
 +
++		/* create eq store */
++		eq_store = snd_us16x08_create_eq_store();
++		if (!eq_store)
++			return -ENOMEM;
++
 +		/* add EQ controls */
-+		for (i = 0; i < sizeof(eq_controls) /
-+			sizeof(control_params); i++) {
++		for (i = 0; i < ARRAY_SIZE(eq_controls); i++) {
 +
 +			err = add_new_ctl(mixer,
 +				eq_controls[i].kcontrol_new,
@@ -1445,16 +1440,14 @@ index 0000000..700c2ad
 +				eq_controls[i].num_channels,
 +				eq_controls[i].name,
 +				eq_store,
-+				eq_controls[i].freeer, NULL);
++				i == 0, /* release eq_store only once */
++				NULL);
 +			if (err < 0)
 +				return err;
 +		}
 +
 +		/* add compressor controls */
-+		for (i = 0;
-+			i < sizeof(comp_controls)
-+			/ sizeof(control_params);
-+			i++) {
++		for (i = 0; i < ARRAY_SIZE(comp_controls); i++) {
 +
 +			err = add_new_ctl(mixer,
 +				comp_controls[i].kcontrol_new,
@@ -1463,30 +1456,36 @@ index 0000000..700c2ad
 +				comp_controls[i].num_channels,
 +				comp_controls[i].name,
 +				comp_store,
-+				comp_controls[i].freeer, NULL);
++				false, NULL);
 +			if (err < 0)
 +				return err;
 +		}
++
++		/* create meters store */
++		meter_store = snd_us16x08_create_meter_store();
++		if (!meter_store)
++			return -ENOMEM;
 +
 +		/* meter function 'get' must access to compressor store
 +		 * so place a reference here
 +		 */
 +		meter_store->comp_store = comp_store;
 +		err = add_new_ctl(mixer, &snd_us16x08_meter_ctl,
-+			SND_US16X08_ID_METER, USB_MIXER_U16, 0, "Meter",
-+			(void *) meter_store, snd_usb_mixer_elem_free, NULL);
++			SND_US16X08_ID_METER, USB_MIXER_U16, 0, "Level Meter",
++			meter_store, true, NULL);
 +		if (err < 0)
 +			return err;
 +	}
 +
 +	return 0;
 +}
++
 diff --git a/sound/usb/mixer_us16x08.h b/sound/usb/mixer_us16x08.h
 new file mode 100644
-index 0000000..64f89b5
+index 0000000..a6312fb
 --- /dev/null
 +++ b/sound/usb/mixer_us16x08.h
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,121 @@
 +#ifndef __USB_MIXER_US16X08_H
 +#define __USB_MIXER_US16X08_H
 +
@@ -1601,7 +1600,6 @@ index 0000000..64f89b5
 +	int type;
 +	int num_channels;
 +	const char *name;
-+	void (*freeer)(struct snd_kcontrol *kctl);
 +	int default_val;
 +};
 +
