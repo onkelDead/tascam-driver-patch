@@ -1,5 +1,7 @@
 TASCAM US-16x08 mixer support for kernel driver snd-usb-audio
 
+**IMPORTANT**: This code was [merged upstream](https://github.com/torvalds/linux/blob/master/sound/usb/mixer_us16x08.c) in Linux 4.11.
+
 How to apply this patch.
 
 Download the current kernel sources and required ssl library
